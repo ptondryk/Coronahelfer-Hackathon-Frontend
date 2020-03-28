@@ -4,6 +4,7 @@ import Button from '../../components/Button';
 import { Auth, IAuthContext } from '../../components/App';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCircleNotch } from '@fortawesome/free-solid-svg-icons';
+import '@firebase/messaging';
 
 import { callApi } from '../../api/requests';
 
@@ -77,6 +78,8 @@ const Login: FC<{ history: any }> = ({ history }) => {
 
       setLoading(false);
       history.push(history.location.state ? history.location.state.from : '/');
+      
+      initPushNotifications(res.token);
     } catch (e) {
       console.log(e);
       setError('E-Mail/Telefonnummer oder Passwort falsch.');
@@ -106,11 +109,61 @@ const Login: FC<{ history: any }> = ({ history }) => {
           />
         </Button>
       ) : (
-        <Button onClick={login}>Login</Button>
-      )}
+          <Button onClick={login}>Login</Button>
+        )}
     </form>
   );
 };
+
+function initPushNotifications(jwtToken: any) {
+  var firebase = require("firebase/app");
+  if (!firebase.apps.length) {
+    var firebaseConfig = {
+      apiKey: "apiKey",
+      authDomain: "authDomain",
+      databaseURL: "databaseURL",
+      projectId: "projectId",
+      storageBucket: "storageBucket",
+      messagingSenderId: "messagingSenderId",
+      appId: "appId"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+
+    const messaging = firebase.messaging();
+
+    messaging.requestPermission()
+      .then(function () {
+        console.log('User accepted notifications');
+        return messaging.getToken();
+      })
+      .then(function (token: any) {
+        sendTokenToServer(jwtToken, token);
+      })
+      .catch(function (err: any) {
+        console.log('NO permission to send notifications: ', err);
+      });
+
+    messaging.onMessage(function (payload: any) {
+      console.log('message received!')
+      console.log(payload);
+    });
+  }
+}
+
+const sendTokenToServer = async (jwtToken: any, token: any) => {
+  console.log(token)
+  let res: any = await fetch(`http://backend:3000/api/v1/users/fcmToken`, {
+        method: 'post',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Access-Token': jwtToken,
+        },
+        body: JSON.stringify({
+          fcmToken: token
+        }),
+      });
+}
 
 function Register() {
   const auth: IAuthContext = useContext(Auth);
@@ -164,6 +217,8 @@ function Register() {
         email: '',
         authenticated: true,
       });
+
+      initPushNotifications(res.token)
     } catch (e) {
       console.log(e);
       setError(
